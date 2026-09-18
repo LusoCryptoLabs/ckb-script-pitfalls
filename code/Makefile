@@ -8,7 +8,9 @@ CRATES := fee-type owned-type timed-lock payload-type
 # way these things are found: the clean-machine run failed on it.
 ifeq ($(shell command -v riscv64-unknown-elf-gcc 2>/dev/null),)
 export CC_riscv64imac_unknown_none_elf ?= clang
-export AR_riscv64imac_unknown_none_elf ?= llvm-ar
+# Debian and Ubuntu ship `llvm-ar` only with the `llvm` package, and a runner image may
+# have just the versioned binary (`llvm-ar-18`); take whichever exists.
+export AR_riscv64imac_unknown_none_elf ?= $(shell command -v llvm-ar 2>/dev/null || ls /usr/bin/llvm-ar-* 2>/dev/null | sort -V | tail -1)
 endif
 
 .PHONY: build test clean
