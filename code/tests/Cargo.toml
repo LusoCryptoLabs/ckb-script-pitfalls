@@ -1,0 +1,13 @@
+# A workspace of its own: these tests build for the HOST and run the RISC-V binaries
+# inside ckb-testtool's mock VM.
+[workspace]
+
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+ckb-testtool = "0.14"
+blake2b-ref = "0.3"

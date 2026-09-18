@@ -1,0 +1,14 @@
+[package]
+name = "payload-type"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy type script for pitfall 10: a cell whose data commits to a payload carried in the witness at the cell's own output index"
+
+[features]
+# No vulnerable variant: this one demonstrates the convention rather than a hole.
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"
+blake2b-ref = "0.3"

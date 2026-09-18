@@ -1,0 +1,30 @@
+name: make test
+
+# The clean-machine run: nothing preinstalled but what rust-toolchain.toml asks for.
+# If this passes, `cd code && make test` works for whoever clones the repo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            code/target
+            code/tests/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('code/Cargo.lock', 'code/tests/Cargo.lock') }}
+      - name: Build both variants and run the tests
+        run: make test

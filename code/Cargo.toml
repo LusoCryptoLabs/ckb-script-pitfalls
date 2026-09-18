@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/fee-type",
+    "contracts/owned-type",
+    "contracts/timed-lock",
+    "contracts/payload-type",
+]
+
+# The profile a real on-chain script ships with: small, no unwinding, overflow checks
+# kept on because a silent wraparound in money arithmetic is the worst kind of bug.
+[profile.release]
+overflow-checks = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

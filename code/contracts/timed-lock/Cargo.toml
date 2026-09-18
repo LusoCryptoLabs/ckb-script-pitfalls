@@ -1,0 +1,12 @@
+[package]
+name = "timed-lock"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy lock script for pitfall 09: unlocks once the input's since proves a time has passed"
+
+[features]
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"

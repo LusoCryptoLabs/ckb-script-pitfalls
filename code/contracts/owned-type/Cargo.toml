@@ -1,0 +1,12 @@
+[package]
+name = "owned-type"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy type script for pitfalls 03 and 07: a cell with an owner identity in its data and one permissionless action"
+
+[features]
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"

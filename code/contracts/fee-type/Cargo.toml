@@ -1,0 +1,13 @@
+[package]
+name = "fee-type"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy type script for pitfalls 01 and 02: spending a cell of this type owes a fee to a lock named in the args"
+
+[features]
+# Without it, the script as first written (the pitfall). With it, the correction.
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"
