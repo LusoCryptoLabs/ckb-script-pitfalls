@@ -1,5 +1,7 @@
 # CKB script pitfalls
 
+[![make test](https://github.com/LusoCryptoLabs/ckb-script-pitfalls/actions/workflows/test.yml/badge.svg)](https://github.com/LusoCryptoLabs/ckb-script-pitfalls/actions/workflows/test.yml)
+
 Ways a Nervos CKB script goes wrong that have each cost somebody something, written
 down so the next person does not pay for them again.
 
