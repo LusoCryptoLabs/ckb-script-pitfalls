@@ -29,20 +29,27 @@ guards; several of the entries below were guarded by tests that could not fail.
 
 ## The catalogue
 
-Numbered in the order they were found. The gaps are entries that only make sense against
-one particular script's structure and are not in this branch.
+Numbered in the order they were found. Five of them, 04, 05, 06, 08 and 14, only make sense
+against one particular script's structure, the Cells contracts, and sat out of this branch
+until those were public; they are in [`case-study/`](case-study/README.md), each with a link
+to its real test.
 
 | # | Pitfall | The one-line version |
 |---|---|---|
 | [01](general/01-a-payment-sum-is-safe-only-against-itself.md) | A payment sum is safe only against itself | "Sum the outputs paying lock L and require at least X" is satisfied once for every script that asks |
 | [02](general/02-a-typed-output-meets-the-capacity.md) | A typed output meets the capacity | A payment output with a hostile type script has the right capacity and cannot be spent |
 | [03](general/03-a-truncated-compare-fails-open.md) | A truncated compare fails open | Twenty bytes never equal thirty-two, so the guard admits everything |
+| [04](case-study/04-a-new-cells-lock-is-not-pinned.md) | A new cell's lock is not pinned | Anyone registers a cell under an unspendable lock and its whole id range is frozen for ever |
+| [05](case-study/05-the-sentinel-is-a-cell-too.md) | The sentinel is a cell too | "Id is zero" is not "the root": recycle it and any label can be minted at id zero |
+| [06](case-study/06-a-commitment-is-public-the-moment-it-lands.md) | A commitment is public the moment it lands | Copy the thirty-two bytes, mature them on the same clock, and front-run the reveal |
 | [07](general/07-capacity-is-unguarded-on-permissionless-actions.md) | Capacity is unguarded on permissionless actions | Pin every byte of data and leave the capacity free, and a stranger takes the rent |
+| [08](case-study/08-a-deposit-paid-back-to-the-wrong-side.md) | A deposit paid back to the wrong side | A buyer paid the seller with the seller's own listing deposit; found as a real sale |
 | [09](general/09-since-flags.md) | `since` flags | The metric and the relative bit live in the top byte; 0x40 is absolute time, 0xC0 relative |
 | [10](general/10-witnesses-by-output-index.md) | Witnesses by output index | An output's witness is read through `Source::Input` indexing, and the order must be pinned |
 | [11](general/11-queryiter-panics.md) | `QueryIter` panics | Fail-closed, but with the library's exit code, not yours |
 | [12](general/12-comments-are-the-specification.md) | Comments are the specification | A comment that promises more than the code does is a defect; measure every "roughly" |
 | [13](general/13-examples-are-not-properties.md) | Examples are not properties | 171 example tests missed a hole a 225-point grid found in one run |
+| [14](case-study/14-a-child-cell-buys-its-own-future.md) | A child cell buys its own future | Permissionless renewal let a sub-name outlive its parent's change of hands |
 
 ## Run them
 
