@@ -24,6 +24,14 @@ header and no self-attestation.
   meant.
 - Forgetting that timestamps in `since` are **seconds** while block headers carry
   **milliseconds**.
+- Comparing with `ckb_std::since::Since` through `lt`. Two values whose flags differ
+  cannot be compared: an input with no `since` (0) against an absolute timestamp, or a
+  relative timestamp against it. `partial_cmp` is `None`, so they are neither less nor
+  greater, and `if since.lt(&until) { refuse }` lets them through. `ge` is false for them
+  as well, so `if !since.ge(&until) { refuse }` holds; reading the flags first, as below,
+  holds too. phroi found this in a deployed time lock
+  ([ckb-devrel/ckb-proxy-locks#6](https://github.com/ckb-devrel/ckb-proxy-locks/issues/6),
+  fix in #7). Checked here with ckb-std 0.15.3.
 
 ## The patterns that hold
 
@@ -50,13 +58,15 @@ is the whole cooldown rule.
 ## The test
 
 Both flag bytes wrong (absolute where relative is required, epoch where timestamp is)
-must be refused; the boundary value must be tested to the second in both directions. The
+must be refused, and so must an input with no `since` at all; the boundary value must be
+tested to the second in both directions. The
 harness can set any `since`; consensus only checks it on a real network, so the script
 must check the flags itself.
 
 ## Runnable
 
-`code/contracts/timed-lock`, test `p09_since_flags`, boundary tested to the second.
+`code/contracts/timed-lock`, test `p09_since_flags`, boundary tested to the second; the
+`ckb-std` comparison in `p09_since_that_cannot_be_compared`.
 
 ## References
 

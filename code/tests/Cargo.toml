@@ -11,3 +11,5 @@ license = "MIT"
 [dependencies]
 ckb-testtool = "0.14"
 blake2b-ref = "0.3"
+# Only for the host-side check of `Since` comparisons in 09; the scripts use their own.
+ckb-std = "=0.15.3"

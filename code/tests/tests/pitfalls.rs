@@ -253,6 +253,29 @@ fn p09_since_flags() {
     // And the boundary, to the second, on the fixed build.
     refused(&timed_tx(Fixed, unlock_at, absolute - 1), 2, "09 one second early");
     passed(&timed_tx(Fixed, unlock_at, absolute + 1), "09 one second late");
+    // An input with no since at all. The fixed build refuses it for its flag; the
+    // vulnerable one only because its value, 0, happens to be early.
+    refused(&timed_tx(Fixed, unlock_at, 0), 3, "09 fixed: no since at all");
+    refused(&timed_tx(Vulnerable, unlock_at, 0), 2, "09 vulnerable: no since, early by value only");
+}
+
+/// The same pitfall through ckb-std's `Since`, as phroi found it in a deployed time lock
+/// (ckb-devrel/ckb-proxy-locks#6): two values that cannot be compared (no since against an
+/// absolute timestamp, or a relative one against it) are neither less nor greater, so a
+/// check written as `if since.lt(&until) { refuse }` lets them through. `ge` is false for
+/// them, so `if !since.ge(&until) { refuse }` holds, and so does reading the flags first.
+#[test]
+fn p09_since_that_cannot_be_compared() {
+    use ckb_std::since::Since;
+    let until = Since::from_timestamp(1_000, true).unwrap();
+    for (what, since) in [("no since", Since::new(0)), ("relative", Since::from_timestamp(2_000, false).unwrap())] {
+        assert_eq!(since.partial_cmp(&until), None, "09 {what}: cannot be compared");
+        assert!(!since.lt(&until), "09 {what}: `lt` is false, so a check on `lt` lets it through");
+        assert!(!since.ge(&until), "09 {what}: `ge` is false too, so a check on `ge` refuses it");
+    }
+    // The control: an absolute timestamp after `until` compares, and passes both ways.
+    let later = Since::from_timestamp(2_000, true).unwrap();
+    assert!(!later.lt(&until) && later.ge(&until), "09 control: a later absolute timestamp");
 }
 
 // --- 10: payload-type -------------------------------------------------------------

@@ -108,6 +108,8 @@ Read the source of the `ckb-std` and `ckb-script` versions the project actually 
 not the ones you remember. Confirm constants against the RFCs: `since` has bit 63
 relative and bits 62 and 61 metric, so an absolute timestamp is `0x40` in the top byte and
 a relative one `0xC0`; header timestamps are milliseconds, `since` timestamps seconds.
+A `since` compared through `ckb_std::since::Since` is not ordered when the flags differ:
+`lt` and `ge` are both false, so a check must refuse on `!ge`, never pass on `!lt`.
 
 ## Writing the review
 
