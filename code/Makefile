@@ -1,6 +1,6 @@
 TARGET := riscv64imac-unknown-none-elf
 CARGO  := cargo
-CRATES := fee-type owned-type timed-lock payload-type
+CRATES := fee-type owned-type timed-lock payload-type delegate-vault
 
 # ckb-std compiles a small C shim for RISC-V and, through the `cc` crate, looks for
 # `riscv64-unknown-elf-gcc`. A machine without that toolchain still builds with clang,

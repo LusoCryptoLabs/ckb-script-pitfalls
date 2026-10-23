@@ -13,6 +13,12 @@ shape accepted by both.
 | `owned-type` | 03, 07 | a cell with an owner identity in its data, an always-success lock, and one permissionless action |
 | `timed-lock` | 09 | a lock that opens once the input's `since` proves a date has passed |
 | `payload-type` | 10 | a cell whose data commits to bytes carried in the witness at the cell's output index |
+| `delegate-vault` | 15 | a vault anyone may top up, under a lock that opens whenever the vault's type is in the transaction |
+
+`tests/bin/xudt` is the mainnet xUDT code cell, byte for byte (out point
+`0xc07844ce21b38e4b071dd0e1ee3b0e27afd8d7532491327f39b786343f558ab7:0`, data hash
+`0x50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95`). Entry 15 needs real
+owner mode, so it runs the real token script; the test checks the hash before using it.
 
 ## Run
 

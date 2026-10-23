@@ -1,0 +1,12 @@
+[package]
+name = "delegate-vault"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy script for pitfall 15: a vault anyone may top up, under a lock that defers to the vault's type"
+
+[features]
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"

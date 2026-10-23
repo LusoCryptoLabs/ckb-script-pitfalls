@@ -79,25 +79,34 @@ the cell it depends on changing hands. For every structural exemption and every
 permissionless action: what else satisfies the condition, and is there a kind of cell for
 which "anyone" should be one person?
 
-### 7. What panics instead of returning an error
+### 7. Which locks open for someone who is not the owner
+
+A lock that defers to the protocol's type, an anyone-can-pay lock, an always-success
+instance: each opens for whoever builds a valid transaction, and its hash is still an
+identity. UDT owner mode asks only for an input under the owner lock, so a token naming
+such a lock is minted by anyone who can spend a cell under it. For every lock the protocol
+defines or accepts: who can open it, and what names its hash? The protocol's own LP is
+fine only because the type pins its supply.
+
+### 8. What panics instead of returning an error
 
 `QueryIter` in `ckb-std` panics on any syscall error but `IndexOutOfBound` (read the
 version the project pins). Fail-closed, but with the library's exit code, so diagnosis
 costs time. Note a file that mixes idioms.
 
-### 8. Which assumption is undocumented
+### 9. Which assumption is undocumented
 
 Reading witnesses by output index through `Source::Input` works (it is a plain list
 lookup) but must be pinned by the validator's own ordering. Mark such things medium
 confidence and say how to verify (the RFC, or a case with fewer inputs than outputs).
 
-### 9. Heap and cycles
+### 10. Heap and cycles
 
 `default_alloc!()` gives a fixed heap. A walk that `load_cell_data`s **every** input to
 find thirty-two bytes allocates each. On a permissionless path that is a grief lever.
 Prefer loading a bounded prefix and discarding by length.
 
-### 10. The comments are the specification
+### 11. The comments are the specification
 
 A comment that promises more than the code does is a defect, even when the code is the
 safer of the two. Every "roughly" is a number to measure once.

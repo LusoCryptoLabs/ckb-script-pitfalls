@@ -63,6 +63,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate-vault"
+version = "0.1.0"
+dependencies = [
+ "ckb-std",
+]
+
+[[package]]
 name = "fee-type"
 version = "0.1.0"
 dependencies = [

@@ -338,3 +338,89 @@ fn p13_the_fee_rule_as_a_property() {
     assert_eq!(wrong_on_vulnerable.len(), fees.len() * 2, "the vulnerable build is wrong at {wrong_on_vulnerable:?}");
     assert!(wrong_on_vulnerable.iter().all(|&(fee, paid, typed)| typed && paid >= fee));
 }
+
+// --- 15: delegate-vault -----------------------------------------------------------
+
+/// Data hash of the mainnet xUDT code cell (out point
+/// 0xc07844ce21b38e4b071dd0e1ee3b0e27afd8d7532491327f39b786343f558ab7:0), whose bytes are
+/// committed as `tests/bin/xudt`.
+const XUDT_DATA_HASH: [u8; 32] = [
+    0x50, 0xbd, 0x8d, 0x66, 0x80, 0xb8, 0xb9, 0xcf, 0x98, 0xb7, 0x3f, 0x3c, 0x08, 0xfa, 0xf8, 0xb2,
+    0xa2, 0x19, 0x14, 0x31, 0x19, 0x54, 0x11, 0x8a, 0xd6, 0x60, 0x9b, 0xe6, 0xe7, 0x8a, 0x1b, 0x95,
+];
+
+fn xudt() -> Bytes {
+    let b = std::fs::read("bin/xudt").expect("tests/bin/xudt");
+    assert_eq!(blake2b_256(&b), XUDT_DATA_HASH, "tests/bin/xudt must be the mainnet xUDT, byte for byte");
+    Bytes::from(b)
+}
+
+/// Whose lock hash the minted token names as its owner.
+#[derive(Clone, Copy)]
+enum Owner {
+    TheVaultLock,
+    Somebody,
+}
+
+/// A stranger tops a vault up by one CKB. With `mint`, the same transaction also creates
+/// 10^24 units of a token owned by the given lock.
+fn topup_tx(build: Build, mint: Option<Owner>) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let vault_op = ctx.deploy_cell(load(build, "delegate-vault"));
+    let xudt_op = ctx.deploy_cell(xudt());
+    let id = [7u8; 32];
+    let role = |r: u8| {
+        let mut a = vec![r];
+        a.extend_from_slice(&id);
+        Bytes::from(a)
+    };
+    let vault_type = ctx.build_script(&vault_op, role(0)).expect("vault type");
+    let vault_lock = ctx.build_script(&vault_op, role(1)).expect("vault lock");
+    let stranger = wallet(&mut ctx, "stranger");
+
+    let vault_in = ctx.create_cell(
+        CellOutput::new_builder().capacity(CAP.pack()).lock(vault_lock.clone()).type_(Some(vault_type.clone()).pack()).build(),
+        Bytes::new(),
+    );
+    let cash = ctx.create_cell(CellOutput::new_builder().capacity(CAP.pack()).lock(stranger.clone()).build(), Bytes::new());
+    let mut tb = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(vault_in).build())
+        .input(CellInput::new_builder().previous_output(cash).build())
+        .output(CellOutput::new_builder().capacity((CAP + CKB).pack()).lock(vault_lock.clone()).type_(Some(vault_type).pack()).build())
+        .output_data(Bytes::new().pack())
+        .output(CellOutput::new_builder().capacity((CAP - 300 * CKB).pack()).lock(stranger.clone()).build())
+        .output_data(Bytes::new().pack());
+    if let Some(owner) = mint {
+        let owner_hash = match owner {
+            Owner::TheVaultLock => blake2b_256(vault_lock.as_slice()),
+            Owner::Somebody => blake2b_256(wallet(&mut ctx, "somebody").as_slice()),
+        };
+        let mut args = owner_hash.to_vec();
+        args.extend_from_slice(&[0; 4]); // xUDT flags: none
+        let token = ctx
+            .build_script_with_hash_type(&xudt_op, ckb_testtool::ckb_types::core::ScriptHashType::Data1, Bytes::from(args))
+            .expect("token");
+        tb = tb
+            .output(CellOutput::new_builder().capacity((200 * CKB).pack()).lock(stranger).type_(Some(token).pack()).build())
+            .output_data(Bytes::from(10u128.pow(24).to_le_bytes().to_vec()).pack());
+    }
+    verify(&mut ctx, tb.build())
+}
+
+#[test]
+fn p15_a_lock_anyone_can_open_is_an_owner_key() {
+    // The vault lock is in every top-up, and anyone may top up. A token naming that lock as
+    // its owner is in owner mode in every such transaction: a stranger mints it at will.
+    let attack = |b| topup_tx(b, Some(Owner::TheVaultLock));
+    passed(&attack(Vulnerable), "15 vulnerable: a top-up mints a token owned by the vault lock");
+    refused(&attack(Fixed), 5, "15 fixed: a vault transaction may not raise a supply");
+    // Controls. The honest top-up passes on both builds.
+    let honest = |b| topup_tx(b, None);
+    passed(&honest(Vulnerable), "15 control on vulnerable");
+    passed(&honest(Fixed), "15 control on fixed");
+    // The same mint naming a lock that is not in the transaction fails on both, so it was
+    // the vault lock that opened owner mode, not a gap in the harness.
+    for b in [Vulnerable, Fixed] {
+        assert!(topup_tx(b, Some(Owner::Somebody)).is_err(), "15 [{b:?}]: a mint without owner mode must fail");
+    }
+}
