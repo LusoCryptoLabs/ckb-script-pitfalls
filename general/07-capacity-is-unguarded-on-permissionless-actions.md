@@ -34,6 +34,16 @@ fn capacity_not_reduced(input: &Cell, output: &Cell) -> Result<(), Error> {
 
 Increasing is fine (somebody topping up a cell harms nobody).
 
+## Locks too
+
+The cases above are a type script beside an always-success lock, but the class follows the
+cell, not the kind of script. A reward pool's lock, reviewed in a prototype before it was
+deployed, let anyone spend the pool with a valid claim and checked that the pool continued
+under the same lock with exactly the right token amount. It never read the pool cell's
+capacity, so a claimer could leave the pool at its occupied minimum and keep the rest. A
+test proved it first; the fix is the comparison above, in the lock. A lock that lets
+strangers spend its cell is a permissionless action.
+
 ## The question to ask
 
 For every action that consumes a cell of the type and produces its successor: **where
@@ -45,6 +55,10 @@ For each action, the honest transaction with the output's capacity one shannon b
 input's: refused. Then a property over a grid of capacities: the script accepts exactly
 when `out >= in`. The property found the same thing in one run that five example tests
 had to be written for one by one.
+
+Against a live node, use a cell holding more than its occupied capacity. One already at
+the minimum cannot lose a shannon: the node refuses that before any script runs, which
+says nothing about the guard.
 
 ## Runnable
 
