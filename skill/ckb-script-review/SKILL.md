@@ -129,6 +129,17 @@ it? Following a cell from a known genesis out point is one answer.
 find thirty-two bytes allocates each. On a permissionless path that is a grief lever.
 Prefer loading a bounded prefix and discarding by length.
 
+And the default heap is small. In `ckb-std` 0.15.3, `default_alloc!()` is a 516 KB buddy
+heap (plus 4 KB of fixed blocks), and every block rounds up to a power of two. In
+molecule's `no_std` build (0.7.5) a `Bytes` is a `Vec` and every slice copies, so
+`load_witness_args`, `.lock()`, `.to_opt()` and `.raw_data()` each copy the witness. A
+script whose witness carries whole other transactions met this on a test network: an
+84 KB witness takes a 128 KB block per copy, four copies empty the heap, and the script
+exits with -1 (out of memory) on a batch an honest user built. The fix: `load_witness`
+once and read it through `WitnessArgsReader`, which borrows, and size the heap for the
+largest witness the product lets anyone build. The test pads the witness (150 KB,
+450 KB); the control, on the old build, fails with -1 first.
+
 ### 13. The comments are the specification
 
 A comment that promises more than the code does is a defect, even when the code is the
