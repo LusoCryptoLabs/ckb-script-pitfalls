@@ -95,6 +95,12 @@ such a lock is minted by anyone who can spend a cell under it. For every lock th
 defines or accepts: who can open it, and what names its hash? The protocol's own LP is
 fine only because the type pins its supply.
 
+And the receiving side: a cell of an sUDT or xUDT with amount zero is made with no input of
+that token (0 is not more than 0). "An output of token T to X" proves no value unless the script
+reads the amount, or the transaction spends the cell whose rules vouch for every output of that
+token (named by lock hash and type, not by code hash: a look-alike of another token runs the
+same code).
+
 ### 8. What panics instead of returning an error
 
 `QueryIter` in `ckb-std` panics on any syscall error but `IndexOutOfBound` (read the
