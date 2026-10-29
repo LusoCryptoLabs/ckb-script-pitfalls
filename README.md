@@ -39,7 +39,7 @@ to its real test.
 |---|---|---|
 | [01](general/01-a-payment-sum-is-safe-only-against-itself.md) | A payment sum is safe only against itself | "Sum the outputs paying lock L and require at least X" is satisfied once for every script that asks |
 | [02](general/02-a-typed-output-meets-the-capacity.md) | A typed output meets the capacity | A payment output with a hostile type script has the right capacity and cannot be spent |
-| [03](general/03-a-truncated-compare-fails-open.md) | A truncated compare fails open | Twenty bytes never equal thirty-two, so the guard admits everything |
+| [03](general/03-a-truncated-compare-fails-open.md) | A truncated compare fails open | Twenty bytes never equal thirty-two, nor a molecule field's `as_slice()` the bytes it carries, so the guard admits everything |
 | [04](case-study/04-a-new-cells-lock-is-not-pinned.md) | A new cell's lock is not pinned | Anyone registers a cell under an unspendable lock and its whole id range is frozen for ever |
 | [05](case-study/05-the-sentinel-is-a-cell-too.md) | The sentinel is a cell too | "Id is zero" is not "the root": recycle it and any label can be minted at id zero |
 | [06](case-study/06-a-commitment-is-public-the-moment-it-lands.md) | A commitment is public the moment it lands | Copy the thirty-two bytes, mature them on the same clock, and front-run the reveal |
@@ -64,8 +64,10 @@ the honest transaction accepted by both. `cd code && make test`.
 
 [`skill/ckb-script-review/SKILL.md`](skill/ckb-script-review/SKILL.md) is the method
 that produced the catalogue, written as a skill for Claude Code: the questions to ask
-of any CKB script, in the order they find things, and the discipline of proof above. It
-is plain Markdown and reads as a checklist without the tool.
+of any CKB script, in the order they find things, the steps to run so that none of it
+depends on memory (mutation, the readers on the host, fuzzing a proof with an oracle,
+attacks against the deployed script that spend nothing, and more), and the discipline of
+proof above. It is plain Markdown and reads as a checklist without the tool.
 
 ## Contributing
 
