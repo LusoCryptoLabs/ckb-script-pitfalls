@@ -223,6 +223,23 @@ fn p07_capacity_is_unguarded_on_permissionless_actions() {
     passed(&honest(Fixed), "07 control on fixed");
 }
 
+/// 03 through molecule, on the host: a `Bytes` field's `as_slice()` keeps its four length
+/// bytes, so it never equals the bytes it carries, and a placeholder check written over it
+/// never fires. `raw_data()` is the field's content. The control: a real signature is no
+/// placeholder either way.
+#[test]
+fn p03_molecule_bytes_keep_their_length() {
+    const PLACEHOLDER: [u8; 65] = [0; 65];
+    let vulnerable = |w: &WitnessArgs| w.lock().to_opt().map(|l| l.as_slice() == &PLACEHOLDER[..]).unwrap_or(false);
+    let fixed = |w: &WitnessArgs| w.lock().to_opt().map(|l| l.raw_data()).as_deref() == Some(&PLACEHOLDER[..]);
+    let empty = WitnessArgs::new_builder().lock(bytes_opt(&PLACEHOLDER)).build();
+    assert_eq!(empty.lock().to_opt().unwrap().as_slice().len(), 4 + 65, "03: the length, then the bytes");
+    assert!(!vulnerable(&empty), "03: over as_slice() the placeholder is never seen");
+    assert!(fixed(&empty), "03: over raw_data() it is");
+    let signed = WitnessArgs::new_builder().lock(bytes_opt(&[7; 65])).build();
+    assert!(!vulnerable(&signed) && !fixed(&signed), "03 control: a signature is no placeholder");
+}
+
 // --- 09: timed-lock ---------------------------------------------------------------
 
 fn timed_tx(build: Build, unlock_at: u64, since: u64) -> Result<u64, String> {
