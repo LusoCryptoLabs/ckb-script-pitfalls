@@ -226,7 +226,12 @@ Rebuild the reviewed commit with the pinned toolchain, hash the binary and compa
 the code cell's data hash on chain. If they differ, the code reviewed is not the code
 running. For anyone else to reach the same bytes, `ckb-script-templates` has
 `scripts/reproducible_build_docker`, Rust and LLVM pinned in a container and a
-`checksums.txt` checked in CI.
+`checksums.txt` checked in CI. Pin the C compiler too: the C that `ckb-std` and some crates
+compile carries the compiler's stamp in its objects, which says which one to pin. Two traps:
+a build that reads `ckb-std`'s header path before cargo has fetched the crates fails on a
+fresh clone (fetch first); and editing only a comment changes the binary, because panic
+locations carry line numbers. On an immutable deployed script, even comments wait for the
+next deployment.
 
 ### 7. Dependencies and outside binaries
 
