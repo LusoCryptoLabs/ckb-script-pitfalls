@@ -441,3 +441,47 @@ fn p15_a_lock_anyone_can_open_is_an_owner_key() {
         assert!(topup_tx(b, Some(Owner::Somebody)).is_err(), "15 [{b:?}]: a mint without owner mode must fail");
     }
 }
+
+// --- 16: allowance-lock -----------------------------------------------------------
+
+/// A cell under `allowance-lock` for `owner`, holding `capacity` and allowing `allowance`.
+fn allowance_cell(ctx: &mut Context, code: &ckb_testtool::ckb_types::packed::OutPoint, owner: &Script, allowance: u64, capacity: u64) -> ckb_testtool::ckb_types::packed::OutPoint {
+    let mut args = blake2b_256(owner.as_slice()).to_vec();
+    args.extend_from_slice(&allowance.to_le_bytes());
+    let lock = ctx.build_script(code, Bytes::from(args)).expect("lock");
+    ctx.create_cell(CellOutput::new_builder().capacity(capacity.pack()).lock(lock).build(), Bytes::new())
+}
+
+/// Alice's cell (1,000 CKB, allowing 1 CKB) and, when `made`, one Mallory made for Alice
+/// (100 CKB, allowing everything), spent together with these outputs.
+fn allowance_tx(build: Build, made: bool, to_alice: u64, to_mallory: u64) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let code = ctx.deploy_cell(load(build, "allowance-lock"));
+    let alice = wallet(&mut ctx, "alice");
+    let mallory = wallet(&mut ctx, "mallory");
+    let mut b = TransactionBuilder::default().input(CellInput::new_builder().previous_output(allowance_cell(&mut ctx, &code, &alice, CKB, CAP)).build());
+    if made {
+        b = b.input(CellInput::new_builder().previous_output(allowance_cell(&mut ctx, &code, &alice, u64::MAX, 100 * CKB)).build());
+    }
+    for (lock, capacity) in [(alice, to_alice), (mallory, to_mallory)] {
+        if capacity > 0 {
+            b = b.output(CellOutput::new_builder().capacity(capacity.pack()).lock(lock).build()).output_data(Bytes::new().pack());
+        }
+    }
+    verify(&mut ctx, b.build())
+}
+
+#[test]
+fn p16_an_allowance_anyone_can_claim() {
+    // Mallory's cell for Alice allows more than it holds; beside Alice's real cell, the sum of
+    // allowances covers both, and Alice's 1,000 CKB go to Mallory.
+    passed(&allowance_tx(Vulnerable, true, 0, CAP + 100 * CKB), "16 vulnerable: Alice's cell taken");
+    refused(&allowance_tx(Fixed, true, 0, CAP + 100 * CKB), 2, "16 fixed: an allowance counts up to its own cell's CKB");
+    // The controls: Alice paid back what her cell holds, less its own allowance, with Mallory's
+    // cell beside it or not, passes on both builds.
+    for build in [Vulnerable, Fixed] {
+        passed(&allowance_tx(build, true, CAP - CKB, 100 * CKB), "16 control: Alice paid, Mallory's cell back to Mallory");
+        passed(&allowance_tx(build, false, CAP - CKB, 0), "16 control: Alice's cell alone, paid back");
+        refused(&allowance_tx(build, false, CAP - CKB - 1, 0), 2, "16 control: a shannon over the allowance");
+    }
+}

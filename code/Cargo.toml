@@ -6,6 +6,7 @@ members = [
     "contracts/timed-lock",
     "contracts/payload-type",
     "contracts/delegate-vault",
+    "contracts/allowance-lock",
 ]
 
 # The profile a real on-chain script ships with: small, no unwinding, overflow checks

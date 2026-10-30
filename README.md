@@ -7,7 +7,8 @@ down so the next person does not pay for them again.
 
 Every entry here was found in a real script and reproduced in the VM against that script
 as it stood: 01 to 14 in scripts running on a public network, against the deployed
-binary, and 15 in a project's published source before its deployment. Each comes with a
+binary, 15 in a project's published source before its deployment, and 16 on a public test
+network against the deployed binary. Each comes with a
 test that fails on the old code and passes on the corrected one, with a control beside
 it. None of them is a theory. Most of them survived several review passes and a growing suite of example
 tests before somebody asked the right question.
@@ -52,6 +53,7 @@ to its real test.
 | [13](general/13-examples-are-not-properties.md) | Examples are not properties | 171 example tests missed a hole a 225-point grid found in one run |
 | [14](case-study/14-a-child-cell-buys-its-own-future.md) | A child cell buys its own future | Permissionless renewal let a sub-name outlive its parent's change of hands |
 | [15](general/15-a-lock-anyone-can-open-is-an-owner-key.md) | A lock anyone can open is an owner key | A token owned by a protocol's delegating lock is minted by whoever uses the protocol |
+| [16](general/16-an-allowance-anyone-can-claim.md) | An allowance anyone can claim | Summed per owner, an allowance stated by a cell anyone can make cancels the owner's own cells |
 
 ## Run them
 

@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "allowance-lock"
+version = "0.1.0"
+dependencies = [
+ "ckb-std",
+]
+
+[[package]]
 name = "blake2b-ref"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

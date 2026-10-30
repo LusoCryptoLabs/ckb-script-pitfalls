@@ -14,6 +14,7 @@ shape accepted by both.
 | `timed-lock` | 09 | a lock that opens once the input's `since` proves a date has passed |
 | `payload-type` | 10 | a cell whose data commits to bytes carried in the witness at the cell's output index |
 | `delegate-vault` | 15 | a vault anyone may top up, under a lock that opens whenever the vault's type is in the transaction |
+| `allowance-lock` | 16 | a lock that opens for anyone who pays its owner back what its cells hold, less what each allows |
 
 `tests/bin/xudt` is the mainnet xUDT code cell, byte for byte (out point
 `0xc07844ce21b38e4b071dd0e1ee3b0e27afd8d7532491327f39b786343f558ab7:0`, data hash

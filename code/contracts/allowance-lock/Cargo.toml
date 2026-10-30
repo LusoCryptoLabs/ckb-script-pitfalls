@@ -1,0 +1,12 @@
+[package]
+name = "allowance-lock"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy lock for pitfall 16: opens for anyone who pays its owner back what it holds, less an allowance in its args"
+
+[features]
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"
