@@ -15,7 +15,7 @@ jobs:
       run:
         working-directory: code
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Toolchain from rust-toolchain.toml
         run: rustup show
       - name: A C compiler that targets RISC-V, for ckb-std's shim
