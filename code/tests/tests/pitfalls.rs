@@ -58,12 +58,13 @@ fn wallet(ctx: &mut Context, who: &str) -> Script {
 
 // --- 01 and 02: fee-type ----------------------------------------------------------
 
-/// An output paying the treasury: its capacity, and whether a foreign type script is
-/// attached to it (the shape of pitfall 02).
+/// An output paying the treasury: its capacity, whether a foreign type script is
+/// attached to it (the shape of pitfall 02), and whether it carries data.
 #[derive(Clone, Copy)]
 struct Pay {
     ckb: u64,
     typed: bool,
+    data: bool,
 }
 
 /// Spend one fee-type cell per entry of `fees` (each at its own fee, so each is its own
@@ -88,17 +89,19 @@ fn fee_tx(build: Build, fees: &[u64], pays: &[Pay]) -> Result<u64, String> {
         inputs.push(CellInput::new_builder().previous_output(op).build());
     }
     let mut outputs = Vec::new();
+    let mut data = Vec::new();
     for p in pays {
         let b = CellOutput::new_builder().capacity((p.ckb * CKB).pack()).lock(treasury.clone());
         outputs.push(if p.typed { b.type_(Some(hostile.clone()).pack()).build() } else { b.build() });
+        data.push(if p.data { Bytes::from(vec![0u8; 8]) } else { Bytes::new() }.pack());
     }
     // The holder's change, so a transaction paying nobody still has an output.
     outputs.push(CellOutput::new_builder().capacity((100 * CKB).pack()).lock(holder.clone()).build());
-    let n = outputs.len();
+    data.push(Bytes::new().pack());
     let tx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)
-        .outputs_data(vec![Bytes::new().pack(); n])
+        .outputs_data(data)
         .build();
     verify(&mut ctx, tx)
 }
@@ -108,11 +111,11 @@ fn p01_one_payment_answers_two_instances() {
     // Two cells at fees 100 and 50: two script groups reading the same outputs. One
     // output of 100 covers the larger fee. As first written, both instances are
     // satisfied and 50 CKB are never paid.
-    let attack = |b| fee_tx(b, &[100, 50], &[Pay { ckb: 100, typed: false }]);
+    let attack = |b| fee_tx(b, &[100, 50], &[Pay { ckb: 100, typed: false, data: false }]);
     passed(&attack(Vulnerable), "01 vulnerable: one output of 100 answers fees of 100 and 50");
     refused(&attack(Fixed), 3, "01 fixed: the total of 150 is demanded");
     // The control: paying both is accepted on either build.
-    let honest = |b| fee_tx(b, &[100, 50], &[Pay { ckb: 150, typed: false }]);
+    let honest = |b| fee_tx(b, &[100, 50], &[Pay { ckb: 150, typed: false, data: false }]);
     passed(&honest(Vulnerable), "01 control on vulnerable");
     passed(&honest(Fixed), "01 control on fixed");
 }
@@ -121,10 +124,10 @@ fn p01_one_payment_answers_two_instances() {
 fn p02_a_typed_output_meets_the_capacity() {
     // The fee output carries a foreign type script: right lock, right capacity, and the
     // treasury cannot spend it alone.
-    let attack = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: true }]);
+    let attack = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: true, data: false }]);
     passed(&attack(Vulnerable), "02 vulnerable: a typed output counts as payment");
     refused(&attack(Fixed), 3, "02 fixed: only a pure output counts");
-    let honest = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: false }]);
+    let honest = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: false, data: false }]);
     passed(&honest(Vulnerable), "02 control on vulnerable");
     passed(&honest(Fixed), "02 control on fixed");
 }
@@ -341,9 +344,9 @@ fn p13_the_fee_rule_as_a_property() {
         for paid in [fee - 1, fee, fee + 1] {
             for typed in [false, true] {
                 let should_pass = !typed && paid >= fee;
-                let fixed = fee_tx(Fixed, &[fee], &[Pay { ckb: paid, typed }]).is_ok();
+                let fixed = fee_tx(Fixed, &[fee], &[Pay { ckb: paid, typed, data: false }]).is_ok();
                 assert_eq!(fixed, should_pass, "fixed build at fee {fee}, paid {paid}, typed {typed}");
-                let vulnerable = fee_tx(Vulnerable, &[fee], &[Pay { ckb: paid, typed }]).is_ok();
+                let vulnerable = fee_tx(Vulnerable, &[fee], &[Pay { ckb: paid, typed, data: false }]).is_ok();
                 if vulnerable != should_pass {
                     wrong_on_vulnerable.push((fee, paid, typed));
                 }
@@ -455,6 +458,11 @@ fn allowance_cell(ctx: &mut Context, code: &ckb_testtool::ckb_types::packed::Out
 /// Alice's cell (1,000 CKB, allowing 1 CKB) and, when `made`, one Mallory made for Alice
 /// (100 CKB, allowing everything), spent together with these outputs.
 fn allowance_tx(build: Build, made: bool, to_alice: u64, to_mallory: u64) -> Result<u64, String> {
+    allowance_tx_with(build, made, to_alice, to_mallory, Bytes::new())
+}
+
+/// The same, with `alice_data` in the cell that pays Alice back.
+fn allowance_tx_with(build: Build, made: bool, to_alice: u64, to_mallory: u64, alice_data: Bytes) -> Result<u64, String> {
     let mut ctx = Context::default();
     let code = ctx.deploy_cell(load(build, "allowance-lock"));
     let alice = wallet(&mut ctx, "alice");
@@ -463,9 +471,9 @@ fn allowance_tx(build: Build, made: bool, to_alice: u64, to_mallory: u64) -> Res
     if made {
         b = b.input(CellInput::new_builder().previous_output(allowance_cell(&mut ctx, &code, &alice, u64::MAX, 100 * CKB)).build());
     }
-    for (lock, capacity) in [(alice, to_alice), (mallory, to_mallory)] {
+    for (lock, capacity, data) in [(alice, to_alice, alice_data), (mallory, to_mallory, Bytes::new())] {
         if capacity > 0 {
-            b = b.output(CellOutput::new_builder().capacity(capacity.pack()).lock(lock).build()).output_data(Bytes::new().pack());
+            b = b.output(CellOutput::new_builder().capacity(capacity.pack()).lock(lock).build()).output_data(data.pack());
         }
     }
     verify(&mut ctx, b.build())
@@ -483,5 +491,103 @@ fn p16_an_allowance_anyone_can_claim() {
         passed(&allowance_tx(build, true, CAP - CKB, 100 * CKB), "16 control: Alice paid, Mallory's cell back to Mallory");
         passed(&allowance_tx(build, false, CAP - CKB, 0), "16 control: Alice's cell alone, paid back");
         refused(&allowance_tx(build, false, CAP - CKB - 1, 0), 2, "16 control: a shannon over the allowance");
+    }
+}
+
+// --- What a generic attack pass found in the corrected toys ---------------------------
+//
+// Each toy above is corrected for the pitfall it shows. A pass of generic attacks over their
+// honest transactions (skim a payee, move an output under the builder's lock, attach a type
+// or data to a payment; 2026-11-05) found four more holes in the corrected builds, none of
+// them the pitfall under study. Three are closed in both builds and their tests run on both;
+// the fourth is part of pitfall 02's correction. Each attack is refused with its own code and
+// the honest transaction of the same shape passes.
+
+#[test]
+fn fee_type_a_payment_with_data_is_not_paid() {
+    // The treasury's output carries eight bytes of data: right lock, right capacity, and not
+    // CKB a wallet counts. Pitfall 02's correction must refuse it as it refuses a type.
+    let attack = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: false, data: true }]);
+    passed(&attack(Vulnerable), "02 vulnerable: any output under the treasury lock counts");
+    refused(&attack(Fixed), 3, "02 fixed: an output with data is not a pure payment");
+    let honest = |b| fee_tx(b, &[100], &[Pay { ckb: 100, typed: false, data: false }]);
+    passed(&honest(Fixed), "02 control on fixed: the pure payment");
+}
+
+#[test]
+fn allowance_lock_a_payback_with_data_is_not_paid() {
+    for build in [Vulnerable, Fixed] {
+        refused(&allowance_tx_with(build, false, CAP - CKB, 0, Bytes::from(vec![0u8; 8])), 2, "16: Alice paid back in a cell with data");
+        passed(&allowance_tx_with(build, false, CAP - CKB, 0, Bytes::new()), "16 control: Alice paid back in a plain cell");
+    }
+}
+
+/// A stranger bumps Alice's owned cell and leaves it under Mallory's lock when `moved`.
+fn bump_to(build: Build, moved: bool) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let type_op = ctx.deploy_cell(load(build, "owned-type"));
+    let t = ctx.build_script(&type_op, Bytes::new()).expect("type");
+    let cell_lock = wallet(&mut ctx, "the-cell-lock");
+    let alice = wallet(&mut ctx, "alice");
+    let mallory = wallet(&mut ctx, "mallory");
+    let out_lock = if moved { mallory } else { cell_lock.clone() };
+    let cell = ctx.create_cell(
+        CellOutput::new_builder().capacity((200 * CKB).pack()).lock(cell_lock).type_(Some(t.clone()).pack()).build(),
+        owned_data(owner_prefix(&alice), 1),
+    );
+    let tx = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(cell).build())
+        .output(CellOutput::new_builder().capacity((200 * CKB).pack()).lock(out_lock).type_(Some(t).pack()).build())
+        .output_data(owned_data(owner_prefix(&alice), 2).pack())
+        .witness(WitnessArgs::new_builder().input_type(bytes_opt(b"bump")).build().as_bytes().pack())
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn owned_type_a_bump_keeps_the_lock() {
+    // Under Mallory's lock, Alice could no longer spend her cell to edit it, and nothing in the
+    // type lets the cell be destroyed: her 200 CKB would stay frozen.
+    for build in [Vulnerable, Fixed] {
+        refused(&bump_to(build, true), 10, "a stranger's bump moves the cell under his lock");
+        passed(&bump_to(build, false), "control: the bump that keeps the lock");
+    }
+}
+
+/// A stranger tops the vault up and leaves it under the stranger's lock when `moved`.
+fn vault_topup_to(build: Build, moved: bool) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let vault_op = ctx.deploy_cell(load(build, "delegate-vault"));
+    let role = |r: u8| {
+        let mut a = vec![r];
+        a.extend_from_slice(&[7u8; 32]);
+        Bytes::from(a)
+    };
+    let vault_type = ctx.build_script(&vault_op, role(0)).expect("vault type");
+    let vault_lock = ctx.build_script(&vault_op, role(1)).expect("vault lock");
+    let stranger = wallet(&mut ctx, "stranger");
+    let vault_in = ctx.create_cell(
+        CellOutput::new_builder().capacity(CAP.pack()).lock(vault_lock.clone()).type_(Some(vault_type.clone()).pack()).build(),
+        Bytes::new(),
+    );
+    let cash = ctx.create_cell(CellOutput::new_builder().capacity(CAP.pack()).lock(stranger.clone()).build(), Bytes::new());
+    let out_lock = if moved { stranger.clone() } else { vault_lock };
+    let tx = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(vault_in).build())
+        .input(CellInput::new_builder().previous_output(cash).build())
+        .output(CellOutput::new_builder().capacity((CAP + CKB).pack()).lock(out_lock).type_(Some(vault_type).pack()).build())
+        .output_data(Bytes::new().pack())
+        .output(CellOutput::new_builder().capacity((CAP - 300 * CKB).pack()).lock(stranger).build())
+        .output_data(Bytes::new().pack())
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn delegate_vault_a_topup_keeps_the_lock() {
+    // Under the payer's lock the vault is the payer's to keep: nobody else can top it up.
+    for build in [Vulnerable, Fixed] {
+        refused(&vault_topup_to(build, true), 6, "a top-up moves the vault under the payer's lock");
+        passed(&vault_topup_to(build, false), "control: the top-up that keeps the lock");
     }
 }

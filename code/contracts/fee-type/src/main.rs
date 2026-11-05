@@ -12,7 +12,8 @@
 //!     that total, which cannot be split.
 //!   * **02, a typed output meets the capacity.** As first written, any output under the
 //!     treasury lock counts, whatever type script it carries; a hostile type meets the
-//!     capacity and the treasury cannot spend the cell. Fixed: only pure outputs count.
+//!     capacity and the treasury cannot spend the cell. Fixed: only pure outputs count,
+//!     with no type and no data (a wallet does not count a cell with data as CKB).
 //!
 //! Build without features for the pitfall, with `--features fixed` for the correction.
 #![no_std]
@@ -139,9 +140,18 @@ fn counts(_i: usize) -> Result<bool, Err> {
     Ok(true)
 }
 
-/// The fix: only a PURE output counts. A type the payee does not control meets the
-/// capacity while the funds are not theirs to spend.
+/// The fix: only a PURE output counts, with no type and no data. A type the payee does
+/// not control meets the capacity while the funds are not theirs to spend, and a wallet
+/// does not count a cell with data as CKB.
 #[cfg(feature = "fixed")]
 fn counts(i: usize) -> Result<bool, Err> {
-    Ok(load_cell_type_hash(i, Source::Output).map_err(|_| Err::Encoding)?.is_none())
+    if load_cell_type_hash(i, Source::Output).map_err(|_| Err::Encoding)?.is_some() {
+        return Ok(false);
+    }
+    // Read into no room: a cell with any data says how much it has.
+    match ckb_std::syscalls::load_cell_data(&mut [], 0, i, Source::Output) {
+        Ok(_) => Ok(true),
+        Err(SysError::LengthNotEnough(_)) => Ok(false),
+        Err(_) => Err(Err::Encoding),
+    }
 }
