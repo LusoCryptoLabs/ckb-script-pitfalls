@@ -76,7 +76,8 @@ fn run() -> Result<(), Err> {
         i += 1;
     }
 
-    // What the owner gets: plain cells under their lock (entry 02 is not the subject here).
+    // What the owner gets: plain cells under their lock, with no type and no data (entry 02;
+    // a wallet does not count a cell with data as CKB).
     let mut paid: u128 = 0;
     let mut k = 0;
     loop {
@@ -85,7 +86,7 @@ fn run() -> Result<(), Err> {
             Err(SysError::IndexOutOfBound) => break,
             Err(e) => return Err(e.into()),
         };
-        if lock == owner && load_cell_type(k, Source::Output)?.is_none() {
+        if lock == owner && load_cell_type(k, Source::Output)?.is_none() && no_data(k)? {
             paid += u128::from(load_cell_capacity(k, Source::Output)?);
         }
         k += 1;
@@ -94,6 +95,15 @@ fn run() -> Result<(), Err> {
         return Err(Err::Underpaid);
     }
     Ok(())
+}
+
+/// Whether output `k` holds no data: read into no room, a cell with any says how much it has.
+fn no_data(k: usize) -> Result<bool, Err> {
+    match ckb_std::syscalls::load_cell_data(&mut [], 0, k, Source::Output) {
+        Ok(_) => Ok(true),
+        Err(SysError::LengthNotEnough(_)) => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// The pitfall: an allowance counts as the cell states it.

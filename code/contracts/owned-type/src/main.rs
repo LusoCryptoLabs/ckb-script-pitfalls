@@ -8,7 +8,8 @@
 //!   * **create**: no input of the type. The owner must be usable: not all-zero, and
 //!     not the cell's own always-success lock, which anybody can satisfy.
 //!   * **bump**: one in, one out, permissionless. Anyone may raise `value`; nothing
-//!     else in the data may change.
+//!     else in the data may change, and the cell keeps its lock: under a stranger's lock
+//!     the owner could no longer spend it to edit.
 //!   * **edit**: one in, one out, owner-signed. Anything may change.
 //!
 //! Two pitfalls live here:
@@ -49,6 +50,8 @@ enum Err {
     Unauthorized = 8,
     /// A bump that did not raise the value, or changed the owner.
     Drift = 9,
+    /// A bump that moved the cell under another lock.
+    LockMoved = 10,
 }
 
 pub fn program_entry() -> i8 {
@@ -111,6 +114,11 @@ fn run() -> Result<(), Err> {
             let vout = u64::from_le_bytes(dout[OWNER_LEN..].try_into().map_err(|_| Err::BadData)?);
             if vout <= vin {
                 return Err(Err::Drift);
+            }
+            let lin = load_cell_lock_hash(0, Source::GroupInput).map_err(|_| Err::Encoding)?;
+            let lout = load_cell_lock_hash(0, Source::GroupOutput).map_err(|_| Err::Encoding)?;
+            if lout != lin {
+                return Err(Err::LockMoved);
             }
             capacity_ok()
         }

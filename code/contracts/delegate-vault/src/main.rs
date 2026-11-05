@@ -2,8 +2,9 @@
 //!
 //! One binary, two roles, told apart by `args[0]`; the other thirty-two bytes are an id.
 //!   * **role 0, the type**: a vault may be created freely and afterwards only grow: one
-//!     in, one out, and the output holds at least the input's capacity. Anyone may do
-//!     this; a vault you can pay into is the point.
+//!     in, one out, the output holds at least the input's capacity and stays under the
+//!     same lock. Anyone may do this; a vault you can pay into is the point, and a top-up
+//!     that moved the vault under the payer's lock would take it from everyone else.
 //!   * **role 1, the lock**: opens whenever an input carries the role 0 type of the same
 //!     id. It judges nothing and leaves that to the type, a common and sound design for
 //!     the vault's own cells.
@@ -19,7 +20,7 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{packed::Script, prelude::*},
     error::SysError,
-    high_level::{load_cell_capacity, load_cell_type, load_script},
+    high_level::{load_cell_capacity, load_cell_lock_hash, load_cell_type, load_script},
 };
 
 ckb_std::entry!(program_entry);
@@ -43,6 +44,8 @@ enum Err {
     NoVault = 4,
     /// A vault transaction raised the supply of an xUDT.
     ForeignMint = 5,
+    /// The vault would leave its lock.
+    LockMoved = 6,
 }
 
 pub fn program_entry() -> i8 {
@@ -87,6 +90,11 @@ fn vault_type() -> Result<(), Err> {
             let cout = load_cell_capacity(0, Source::GroupOutput).map_err(|_| Err::Encoding)?;
             if cout < cin {
                 return Err(Err::Shrunk);
+            }
+            let lin = load_cell_lock_hash(0, Source::GroupInput).map_err(|_| Err::Encoding)?;
+            let lout = load_cell_lock_hash(0, Source::GroupOutput).map_err(|_| Err::Encoding)?;
+            if lout != lin {
+                return Err(Err::LockMoved);
             }
             Ok(())
         }
