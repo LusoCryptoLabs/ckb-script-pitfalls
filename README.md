@@ -54,6 +54,7 @@ to its real test.
 | [14](case-study/14-a-child-cell-buys-its-own-future.md) | A child cell buys its own future | Permissionless renewal let a sub-name outlive its parent's change of hands |
 | [15](general/15-a-lock-anyone-can-open-is-an-owner-key.md) | A lock anyone can open is an owner key | A token owned by a protocol's delegating lock is minted by whoever uses the protocol |
 | [16](general/16-an-allowance-anyone-can-claim.md) | An allowance anyone can claim | Summed per owner, an allowance stated by a cell anyone can make cancels the owner's own cells |
+| [17](general/17-an-epoch-since-fraction-compares-unnormalized.md) | An epoch `since` fraction compares unnormalized | A length-zero fraction, epoch + 0/0, compares equal to a real boundary of epoch + i/l and opens the lock early |
 
 ## Run them
 

@@ -591,3 +591,45 @@ fn delegate_vault_a_topup_keeps_the_lock() {
         passed(&vault_topup_to(build, false), "control: the top-up that keeps the lock");
     }
 }
+
+// --- 17: epoch-lock ---------------------------------------------------------------
+
+/// An absolute EpochNumberWithFraction since value: top byte 0x20, then length, index, number.
+fn epoch(number: u64, index: u64, length: u64) -> u64 {
+    (0x20u64 << 56) | (length << 40) | (index << 24) | number
+}
+
+fn epoch_tx(build: Build, boundary: u64, since: u64) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let lock_op = ctx.deploy_cell(load(build, "epoch-lock"));
+    let lock = ctx.build_script(&lock_op, Bytes::from(boundary.to_le_bytes().to_vec())).expect("lock");
+    let bob = wallet(&mut ctx, "bob");
+    let cell = ctx.create_cell(CellOutput::new_builder().capacity(CAP.pack()).lock(lock).build(), Bytes::new());
+    let tx = TransactionBuilder::default()
+        .input(CellInput::new_builder().since(since.pack()).previous_output(cell).build())
+        .output(CellOutput::new_builder().capacity(CAP.pack()).lock(bob).build())
+        .output_data(Bytes::new().pack())
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn p17_epoch_since_fraction_compares_unnormalized() {
+    let boundary = epoch(1000, 1, 2); // the cell opens at epoch 1000 + 1/2
+    let zero = epoch(1000, 0, 0); // the exploit: a length-zero fraction
+    let on_time = epoch(1000, 1, 2); // exactly the boundary
+    let early = epoch(1000, 0, 1); // 1000 + 0/1, genuinely before the boundary
+    let later = epoch(1001, 0, 1); // a whole epoch later
+
+    // The pitfall: 1000 + 0/0 is read as the start of epoch 1000 and opens the lock early.
+    passed(&epoch_tx(Vulnerable, boundary, zero), "17 vulnerable: 1000 + 0/0 opens early");
+    refused(&epoch_tx(Fixed, boundary, zero), 3, "17 fixed: a length-zero fraction is refused");
+
+    // The control: the comparison is otherwise sound on both builds.
+    passed(&epoch_tx(Vulnerable, boundary, on_time), "17 control: on time, vulnerable");
+    passed(&epoch_tx(Fixed, boundary, on_time), "17 control: on time, fixed");
+    refused(&epoch_tx(Vulnerable, boundary, early), 2, "17 vulnerable: a real early fraction is still refused");
+    refused(&epoch_tx(Fixed, boundary, early), 2, "17 fixed: a real early fraction is refused");
+    passed(&epoch_tx(Vulnerable, boundary, later), "17 control: a later epoch, vulnerable");
+    passed(&epoch_tx(Fixed, boundary, later), "17 control: a later epoch, fixed");
+}
