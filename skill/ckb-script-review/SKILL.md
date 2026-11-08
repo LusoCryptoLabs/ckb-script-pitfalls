@@ -78,6 +78,14 @@ nobody can spend, or one that makes the cell's own capacity count as a payment? 
 payment output: is a type script allowed on it? A hostile type meets the capacity and
 cannot be spent.
 
+And for a cell that carries content bound to its id (a Spore, a cluster, a CoTA root, a
+badge): when it moves, is that content pinned not to change? A transfer that keeps the
+cell, its lock and its capacity but rewrites the bound content moves no CKB and no token,
+so a count of either sees a clean transfer; only a check that the content is immutable
+across the move refuses it. The same for a supply a transfer must conserve and an id that
+must stay one cell: a mint into the holder's own cell, or a self-funded clone, takes from
+no party.
+
 ### 6. What the exemptions admit as written
 
 "The id is zero" is not "the one cell that id was reserved for". "Past its date" includes
