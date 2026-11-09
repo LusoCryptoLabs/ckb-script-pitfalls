@@ -120,6 +120,63 @@ fn p01_one_payment_answers_two_instances() {
     passed(&honest(Fixed), "01 control on fixed");
 }
 
+// --- 01, the strictest form: payout-lock -------------------------------------------
+
+/// Spend one payout-lock cell per entry of `batches` (each a distinct id, so each is its
+/// own script group), all owing `recipient` exactly `pay` CKB. `recipient_outs` lists the
+/// CKB of each output paid to the recipient. Returns the verifier's verdict.
+fn payout_tx(build: Build, batches: &[u8], pay: u64, recipient_outs: &[u64]) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let lock_op = ctx.deploy_cell(load(build, "payout-lock"));
+    let recipient = wallet(&mut ctx, "recipient");
+    let recipient_hash = recipient.calc_script_hash();
+    let holder = wallet(&mut ctx, "holder");
+
+    let mut inputs = Vec::new();
+    for &bid in batches {
+        let mut args = [0u8; 72];
+        args[0] = bid; // batch id: distinct per cell, so distinct lock, so distinct group
+        args[32..64].copy_from_slice(recipient_hash.as_slice());
+        args[64..72].copy_from_slice(&(pay * CKB).to_le_bytes());
+        let lock = ctx.build_script(&lock_op, Bytes::from(args.to_vec())).expect("payout lock");
+        let op = ctx.create_cell(
+            CellOutput::new_builder().capacity(CAP.pack()).lock(lock).build(),
+            Bytes::new(),
+        );
+        inputs.push(CellInput::new_builder().previous_output(op).build());
+    }
+    let mut outputs = Vec::new();
+    for &c in recipient_outs {
+        outputs.push(CellOutput::new_builder().capacity((c * CKB).pack()).lock(recipient.clone()).build());
+    }
+    // The holder's change, so a transaction has an output even when it pays the recipient once.
+    outputs.push(CellOutput::new_builder().capacity((100 * CKB).pack()).lock(holder.clone()).build());
+    let n = outputs.len();
+    let tx = TransactionBuilder::default()
+        .inputs(inputs)
+        .outputs(outputs)
+        .outputs_data(vec![Bytes::new().pack(); n])
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn p01_one_output_answers_two_batches() {
+    // The strictest form of 01: each instance requires EXACTLY ONE output paying the
+    // recipient its amount. Two batches (two ids, two groups) owing the same recipient
+    // the same 300, with ONE 300 output: each group finds that one output and is
+    // satisfied, so the recipient is paid 300 where 600 was owed. Capacity is conserved,
+    // so it holds on a real node; the fix (each batch must be the first input) refuses it.
+    let attack = |b| payout_tx(b, &[1, 2], 300, &[300]);
+    passed(&attack(Vulnerable), "01' vulnerable: one 300 output answers two batches");
+    refused(&attack(Fixed), 4, "01' fixed: a batch must be the transaction's first input");
+    // The control: a single honest batch passes on both builds. Paying the recipient
+    // twice is refused by the exactly-one rule itself, which is why the shape is forced.
+    let honest = |b| payout_tx(b, &[1], 300, &[300]);
+    passed(&honest(Vulnerable), "01' control on vulnerable");
+    passed(&honest(Fixed), "01' control on fixed");
+}
+
 #[test]
 fn p02_a_typed_output_meets_the_capacity() {
     // The fee output carries a foreign type script: right lock, right capacity, and the

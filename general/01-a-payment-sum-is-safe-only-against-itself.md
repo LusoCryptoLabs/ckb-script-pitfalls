@@ -37,6 +37,19 @@ Three shapes, each found separately, each the same mistake:
 The same shape reappears one level up whenever two **deployments** of one type script
 (different args, so two script groups) share a fee lock: two actions, one fee.
 
+## The strictest form: "exactly one" does not help
+
+A check does not have to sum. A payout lock that requires **exactly one** output paying a
+recipient its exact amount has the same hole. Two instances, two batch ids so two script
+groups, owing the same recipient the same amount, settled in one transaction with a single
+matching output: each group finds that one output, counts one, and is satisfied, so the
+recipient is paid once where two were owed. The rule even forces that shape, because paying
+the recipient twice makes the count two and is refused, so the honest form is the one the
+lock rejects. It is the same mistake as the sum: each group reads the whole output list and
+nothing ties a matched output to the instance that is resolving. Reproduced in the VM:
+accepted by the as-written lock, the recipient short-paid, capacity conserved so it holds on
+a real node.
+
 ## Why the usual mitigation is wrong
 
 "Not exploitable today because only one deployment exists" was written and was already
@@ -56,6 +69,11 @@ computing what they owe. One-sided is enough, since the strictest requirement bi
   the two contracts, so it is a decision, not a patch. A baked code hash fails **open** if
   it goes stale; pin it with a test against the deployment record.
 - across deployments: a fee lock per deployment. It costs a key.
+- reserve a transaction input for the instance: require the spent cell to be the
+  transaction's first input (`GroupInput[0] == Input[0]`). Only one cell can be first, so
+  two instances cannot share a transaction and the output answers only one of them. It needs
+  no arithmetic and no extra key, and it fits a lock that pays named recipients (the
+  exactly-one form above); the trade is that two of these can no longer be batched together.
 
 Mirror any exemption exactly. If the lock demands nothing for a cell whose payee is
 present (they are taking it back, not being paid), the other script must apply the same
@@ -77,7 +95,9 @@ to the same lock in one transaction each read the whole sum and each are satisfi
 ## Runnable
 
 `code/contracts/fee-type`, tests `p01_one_payment_answers_two_instances` and
-`p13_the_fee_rule_as_a_property` in `code/tests/tests/pitfalls.rs`.
+`p13_the_fee_rule_as_a_property` in `code/tests/tests/pitfalls.rs`. The exactly-one form and
+the leading-input fix: `code/contracts/payout-lock`, test `p01_one_output_answers_two_batches`
+in the same file.
 
 ## References
 
