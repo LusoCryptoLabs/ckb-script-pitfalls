@@ -1,0 +1,13 @@
+[package]
+name = "payout-lock"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Toy lock for pitfall 01 (strictest form): releasing a cell requires exactly one output paying a named recipient an exact amount"
+
+[features]
+# Without it, the script as first written (the pitfall). With it, the correction.
+fixed = []
+
+[dependencies]
+ckb-std = "0.15"
