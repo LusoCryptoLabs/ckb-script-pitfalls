@@ -63,15 +63,20 @@ share, which means reading the other instances' (or the other script's) cells an
 computing what they owe. One-sided is enough, since the strictest requirement binds:
 
 - within one script: sum what is owed over **all** of its instances in the transaction
-  (each priced by its own args), so every instance demands one indivisible figure;
+  that pay the same lock (each priced by its own args), so every instance demands one
+  indivisible figure. Only those that pay the same lock: adding what is owed to another
+  payee makes each payee demand the others' share, and an honest transaction paying two
+  treasuries in full is refused;
 - across two scripts: the one that can do the arithmetic reads the other's inputs (by
   code hash, from its args) and adds what they owe to its own requirement. This couples
   the two contracts, so it is a decision, not a patch. A baked code hash fails **open** if
   it goes stale; pin it with a test against the deployment record.
 - across deployments: a fee lock per deployment. It costs a key.
-- reserve a transaction input for the instance: require the spent cell to be the
-  transaction's first input (`GroupInput[0] == Input[0]`). Only one cell can be first, so
-  two instances cannot share a transaction and the output answers only one of them. It needs
+- reserve a transaction input for the instance: require the group to hold exactly one cell
+  and that cell to be the transaction's first input (`GroupInput[0] == Input[0]`, no
+  `GroupInput[1]`). Two cells under the same lock are one group and the lock runs once for
+  both, so the first-input check alone releases both for one payment. Only one cell can be
+  first, so two instances cannot share a transaction and the output answers only one of them. It needs
   no arithmetic and no extra key, and it fits a lock that pays named recipients (the
   exactly-one form above); the trade is that two of these can no longer be batched together.
 
@@ -94,10 +99,13 @@ to the same lock in one transaction each read the whole sum and each are satisfi
 
 ## Runnable
 
-`code/contracts/fee-type`, tests `p01_one_payment_answers_two_instances` and
-`p13_the_fee_rule_as_a_property` in `code/tests/tests/pitfalls.rs`. The exactly-one form and
-the leading-input fix: `code/contracts/payout-lock`, test `p01_one_output_answers_two_batches`
-in the same file.
+`code/contracts/fee-type`, tests `p01_one_payment_answers_two_instances`,
+`p01_each_treasury_is_owed_its_own_fees` and `p13_the_fee_rule_as_a_property` in
+`code/tests/tests/pitfalls.rs`. The exactly-one form and the leading-input fix:
+`code/contracts/payout-lock`, tests `p01_one_output_answers_two_batches` and
+`p01_two_cells_in_one_batch_are_one_group` in the same file. The per-treasury sum and the
+one-cell group were reported in
+[#8](https://github.com/LusoCryptoLabs/ckb-script-pitfalls/issues/8).
 
 ## References
 

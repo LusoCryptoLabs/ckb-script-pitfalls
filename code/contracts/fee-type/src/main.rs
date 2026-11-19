@@ -8,8 +8,8 @@
 //!     instance requires its own `fee` and reads the whole transaction's outputs. Two
 //!     cells with different fees are two script groups; both read the same outputs, so
 //!     one output covering the larger fee satisfies both. Fixed: every instance sums
-//!     the fee of EVERY input carrying this code, each at its own args, and demands
-//!     that total, which cannot be split.
+//!     the fee of EVERY input carrying this code and owing the same treasury, each at
+//!     its own args, and demands that total, which cannot be split.
 //!   * **02, a typed output meets the capacity.** As first written, any output under the
 //!     treasury lock counts, whatever type script it carries; a hostile type meets the
 //!     capacity and the treasury cannot spend the cell. Fixed: only pure outputs count,
@@ -88,12 +88,16 @@ fn owed(_script: &Script, fee: u64) -> Result<u64, Err> {
     Ok(fee)
 }
 
-/// The fix: sum the fee of EVERY input carrying this code, each at its own args. Every
-/// instance walks the same inputs, so every instance demands the same indivisible total.
+/// The fix: sum the fee of EVERY input carrying this code and owing THIS treasury, each at
+/// its own args. Every instance for the same treasury walks the same inputs, so they all
+/// demand the same indivisible total. Fees owed to another treasury are that treasury's to
+/// check: adding them here would make each treasury demand what the others are owed.
 #[cfg(feature = "fixed")]
 fn owed(script: &Script, _fee: u64) -> Result<u64, Err> {
     let code = script.code_hash();
     let htype = script.hash_type();
+    let args = script.args().raw_data();
+    let treasury = &args[..32];
     let mut total: u64 = 0;
     let mut i = 0usize;
     loop {
@@ -101,7 +105,7 @@ fn owed(script: &Script, _fee: u64) -> Result<u64, Err> {
             Ok(Some(t)) => {
                 if t.code_hash().as_slice() == code.as_slice() && t.hash_type().as_slice() == htype.as_slice() {
                     let a = t.args().raw_data();
-                    if a.len() == ARGS_LEN {
+                    if a.len() == ARGS_LEN && &a[..32] == treasury {
                         let f = u64::from_le_bytes(a[32..40].try_into().map_err(|_| Err::BadArgs)?);
                         total = total.saturating_add(f);
                     }

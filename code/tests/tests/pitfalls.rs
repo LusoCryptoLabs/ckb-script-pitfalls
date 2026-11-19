@@ -178,6 +178,108 @@ fn p01_one_output_answers_two_batches() {
 }
 
 #[test]
+fn p01_two_cells_in_one_batch_are_one_group() {
+    // Reported in ckb-script-pitfalls#8. Two cells under the SAME payout lock are one script
+    // group, so the lock runs once for both. The first-input rule holds for the group's first
+    // cell, and one 300 output then releases 600. The fix also requires exactly one cell in
+    // the group.
+    let attack = |b| payout_tx(b, &[1, 1], 300, &[300]);
+    passed(&attack(Vulnerable), "01' vulnerable: one output releases two cells of one batch");
+    refused(&attack(Fixed), 5, "01' fixed: one cell per batch");
+    // The control: paying 600 to release two cells is still refused by exactly-one, and a
+    // single cell passes on both builds.
+    let honest = |b| payout_tx(b, &[1], 300, &[300]);
+    passed(&honest(Vulnerable), "01' control on vulnerable");
+    passed(&honest(Fixed), "01' control on fixed");
+}
+
+/// One payout cell, its recipient paid 300 CKB in an output that may carry a foreign type
+/// or eight bytes of data.
+fn payout_shaped(build: Build, typed: bool, data: bool) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let lock_op = ctx.deploy_cell(load(build, "payout-lock"));
+    let recipient = wallet(&mut ctx, "recipient");
+    let holder = wallet(&mut ctx, "holder");
+    let hostile = wallet(&mut ctx, "hostile-type");
+    let mut args = [0u8; 72];
+    args[0] = 1;
+    args[32..64].copy_from_slice(recipient.calc_script_hash().as_slice());
+    args[64..72].copy_from_slice(&(300 * CKB).to_le_bytes());
+    let lock = ctx.build_script(&lock_op, Bytes::from(args.to_vec())).expect("payout lock");
+    let op = ctx.create_cell(CellOutput::new_builder().capacity(CAP.pack()).lock(lock).build(), Bytes::new());
+    let pay = CellOutput::new_builder().capacity((300 * CKB).pack()).lock(recipient);
+    let pay = if typed { pay.type_(Some(hostile).pack()).build() } else { pay.build() };
+    let tx = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(op).build())
+        .output(pay)
+        .output_data(if data { Bytes::from(vec![0u8; 8]) } else { Bytes::new() }.pack())
+        .output(CellOutput::new_builder().capacity((100 * CKB).pack()).lock(holder).build())
+        .output_data(Bytes::new().pack())
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn p02_a_payout_counts_only_a_pure_output() {
+    // The exactly-one payout has pitfall 02 too: an output with the right lock and capacity
+    // but a foreign type, or data, is not CKB the recipient can spend.
+    for (typed, data) in [(true, false), (false, true)] {
+        passed(&payout_shaped(Vulnerable, typed, data), "02 payout vulnerable: a typed or data output counts");
+        refused(&payout_shaped(Fixed, typed, data), 3, "02 payout fixed: only a pure output counts");
+    }
+    passed(&payout_shaped(Vulnerable, false, false), "02 payout control on vulnerable");
+    passed(&payout_shaped(Fixed, false, false), "02 payout control on fixed");
+}
+
+/// Spend one fee-type cell per entry of `cells`, each `(treasury, fee)`, and pay each
+/// treasury as `pays` says, each `(treasury, ckb)`, in pure outputs.
+fn fee_tx_to(build: Build, cells: &[(&str, u64)], pays: &[(&str, u64)]) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let fee_op = ctx.deploy_cell(load(build, "fee-type"));
+    let holder = wallet(&mut ctx, "holder");
+    let mut inputs = Vec::new();
+    for &(who, fee) in cells {
+        let mut args = wallet(&mut ctx, who).calc_script_hash().as_bytes().to_vec();
+        args.extend_from_slice(&(fee * CKB).to_le_bytes());
+        let t = ctx.build_script(&fee_op, Bytes::from(args)).expect("fee type");
+        let op = ctx.create_cell(
+            CellOutput::new_builder().capacity(CAP.pack()).lock(holder.clone()).type_(Some(t).pack()).build(),
+            Bytes::new(),
+        );
+        inputs.push(CellInput::new_builder().previous_output(op).build());
+    }
+    let mut outputs = Vec::new();
+    for &(who, ckb) in pays {
+        outputs.push(CellOutput::new_builder().capacity((ckb * CKB).pack()).lock(wallet(&mut ctx, who)).build());
+    }
+    outputs.push(CellOutput::new_builder().capacity((100 * CKB).pack()).lock(holder).build());
+    let n = outputs.len();
+    let tx = TransactionBuilder::default()
+        .inputs(inputs)
+        .outputs(outputs)
+        .outputs_data(vec![Bytes::new().pack(); n])
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn p01_each_treasury_is_owed_its_own_fees() {
+    // Reported in ckb-script-pitfalls#8. Fees of 100 to one treasury and 150 to another, both
+    // paid in full. Summing every fee, whoever it is owed to, makes each treasury demand 250,
+    // and the honest transaction is refused. The fix sums only the fees owed to this treasury.
+    let honest = |b| fee_tx_to(b, &[("treasury-a", 100), ("treasury-b", 150)], &[("treasury-a", 100), ("treasury-b", 150)]);
+    passed(&honest(Vulnerable), "01 vulnerable: two treasuries paid in full");
+    passed(&honest(Fixed), "01 fixed: two treasuries paid in full");
+    // The controls: the sum still holds within one treasury, and across two each is checked.
+    let one_short = |b| fee_tx_to(b, &[("treasury-a", 100), ("treasury-a", 50)], &[("treasury-a", 100)]);
+    passed(&one_short(Vulnerable), "01 vulnerable: one output of 100 answers 100 and 50 to one treasury");
+    refused(&one_short(Fixed), 3, "01 fixed: one treasury is owed 150");
+    let b_short = |b| fee_tx_to(b, &[("treasury-a", 100), ("treasury-b", 150)], &[("treasury-a", 100), ("treasury-b", 149)]);
+    refused(&b_short(Vulnerable), 3, "01 vulnerable: treasury b is short");
+    refused(&b_short(Fixed), 3, "01 fixed: treasury b is short");
+}
+
+#[test]
 fn p02_a_typed_output_meets_the_capacity() {
     // The fee output carries a foreign type script: right lock, right capacity, and the
     // treasury cannot spend it alone.
@@ -646,6 +748,55 @@ fn delegate_vault_a_topup_keeps_the_lock() {
     for build in [Vulnerable, Fixed] {
         refused(&vault_topup_to(build, true), 6, "a top-up moves the vault under the payer's lock");
         passed(&vault_topup_to(build, false), "control: the top-up that keeps the lock");
+    }
+}
+
+/// A stranger tops the vault up by one CKB and, with `stray`, also spends a plain cell of 500
+/// CKB that someone sent to the vault lock, taking its capacity as change.
+fn vault_topup_with_stray(build: Build, stray: bool) -> Result<u64, String> {
+    let mut ctx = Context::default();
+    let vault_op = ctx.deploy_cell(load(build, "delegate-vault"));
+    let role = |r: u8| {
+        let mut a = vec![r];
+        a.extend_from_slice(&[7u8; 32]);
+        Bytes::from(a)
+    };
+    let vault_type = ctx.build_script(&vault_op, role(0)).expect("vault type");
+    let vault_lock = ctx.build_script(&vault_op, role(1)).expect("vault lock");
+    let stranger = wallet(&mut ctx, "stranger");
+    let vault_in = ctx.create_cell(
+        CellOutput::new_builder().capacity(CAP.pack()).lock(vault_lock.clone()).type_(Some(vault_type.clone()).pack()).build(),
+        Bytes::new(),
+    );
+    let cash = ctx.create_cell(CellOutput::new_builder().capacity(CAP.pack()).lock(stranger.clone()).build(), Bytes::new());
+    let mut tb = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(vault_in).build())
+        .input(CellInput::new_builder().previous_output(cash).build());
+    let mut change = CAP - 300 * CKB;
+    if stray {
+        let op = ctx.create_cell(CellOutput::new_builder().capacity((500 * CKB).pack()).lock(vault_lock.clone()).build(), Bytes::new());
+        tb = tb.input(CellInput::new_builder().previous_output(op).build());
+        change += 500 * CKB;
+    }
+    let tx = tb
+        .output(CellOutput::new_builder().capacity((CAP + CKB).pack()).lock(vault_lock).type_(Some(vault_type).pack()).build())
+        .output_data(Bytes::new().pack())
+        .output(CellOutput::new_builder().capacity(change.pack()).lock(stranger).build())
+        .output_data(Bytes::new().pack())
+        .build();
+    verify(&mut ctx, tx)
+}
+
+#[test]
+fn delegate_vault_the_lock_opens_only_the_vault() {
+    // Found on the fixed build by an automated attack search. The lock opens every cell under it once a
+    // vault is among the inputs, and the type judges only the vault. A plain cell sent to the
+    // vault lock is taken by whoever tops up next. The fix opens only cells that carry the
+    // vault type; a plain cell under this lock stays where it is.
+    passed(&vault_topup_with_stray(Vulnerable, true), "vulnerable: a top-up sweeps a plain cell under the vault lock");
+    refused(&vault_topup_with_stray(Fixed, true), 7, "fixed: the lock opens only the vault");
+    for build in [Vulnerable, Fixed] {
+        passed(&vault_topup_with_stray(build, false), "control: the plain top-up");
     }
 }
 
