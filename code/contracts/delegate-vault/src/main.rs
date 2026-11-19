@@ -34,7 +34,7 @@ const XUDT_DATA_HASH: [u8; 32] = [
 ];
 
 #[repr(i8)]
-#[allow(dead_code)] // ForeignMint exists only in the fixed build
+#[allow(dead_code)] // ForeignMint and Stray exist only in the fixed build
 enum Err {
     Encoding = 1,
     Arity = 2,
@@ -46,6 +46,8 @@ enum Err {
     ForeignMint = 5,
     /// The vault would leave its lock.
     LockMoved = 6,
+    /// The lock was asked to open a cell that is not the vault (fix only).
+    Stray = 7,
 }
 
 pub fn program_entry() -> i8 {
@@ -102,25 +104,51 @@ fn vault_type() -> Result<(), Err> {
     }
 }
 
+fn is_vault(t: &Script, script: &Script, id: &[u8]) -> bool {
+    let a = t.args().raw_data();
+    t.code_hash().as_slice() == script.code_hash().as_slice()
+        && t.hash_type().as_slice() == script.hash_type().as_slice()
+        && a.len() == 33
+        && a[0] == 0
+        && a[1..] == *id
+}
+
 /// Opens when some input carries the role 0 type of the same id. Judgement is the type's.
 fn vault_lock(script: &Script, id: &[u8]) -> Result<(), Err> {
+    only_the_vault(script, id)?;
     let mut i = 0usize;
     loop {
         match load_cell_type(i, Source::Input) {
             Ok(Some(t)) => {
-                let a = t.args().raw_data();
-                if t.code_hash().as_slice() == script.code_hash().as_slice()
-                    && t.hash_type().as_slice() == script.hash_type().as_slice()
-                    && a.len() == 33
-                    && a[0] == 0
-                    && a[1..] == *id
-                {
+                if is_vault(&t, script, id) {
                     return Ok(());
                 }
                 i += 1;
             }
             Ok(None) => i += 1,
             Err(SysError::IndexOutOfBound) => return Err(Err::NoVault),
+            Err(_) => return Err(Err::Encoding),
+        }
+    }
+}
+
+/// The pitfall: the lock opens every cell under it once a vault is among the inputs, and the
+/// type judges only the vault, so a plain cell sent to this lock is judged by nobody.
+#[cfg(not(feature = "fixed"))]
+fn only_the_vault(_script: &Script, _id: &[u8]) -> Result<(), Err> {
+    Ok(())
+}
+
+/// The fix: defer to the type only for cells the type judges. Every cell this lock opens
+/// must carry the vault type; a plain cell sent here stays where it is.
+#[cfg(feature = "fixed")]
+fn only_the_vault(script: &Script, id: &[u8]) -> Result<(), Err> {
+    let mut i = 0usize;
+    loop {
+        match load_cell_type(i, Source::GroupInput) {
+            Ok(Some(t)) if is_vault(&t, script, id) => i += 1,
+            Ok(_) => return Err(Err::Stray),
+            Err(SysError::IndexOutOfBound) => return Ok(()),
             Err(_) => return Err(Err::Encoding),
         }
     }

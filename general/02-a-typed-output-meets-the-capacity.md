@@ -48,7 +48,9 @@ build the attack is a harness that has never tested it.
 
 ## Runnable
 
-`code/contracts/fee-type`, test `p02_a_typed_output_meets_the_capacity`.
+`code/contracts/fee-type`, test `p02_a_typed_output_meets_the_capacity`. The same check in a
+lock that requires exactly one payment: `code/contracts/payout-lock`, test
+`p02_a_payout_counts_only_a_pure_output`.
 
 ## References
 

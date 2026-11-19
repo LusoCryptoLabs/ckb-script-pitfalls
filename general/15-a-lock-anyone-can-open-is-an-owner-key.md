@@ -7,7 +7,10 @@ sits beside a token that names such a lock: whoever can open the lock mints the 
 
 Many CKB protocols give their cells a lock that does not judge. It opens whenever the
 protocol's type script is in the transaction and leaves every decision to that type. For
-the protocol's own cells this is sound: the type runs, and the type decides.
+the protocol's own cells this is sound: the type runs, and the type decides. It holds only
+for cells that carry the type. A plain cell sent to the lock has no type, nothing judges
+it, and the lock opens it for whoever builds the next protocol transaction. Such a lock
+should open only cells that carry the protocol's type.
 
 But a lock hash is also an identity. sUDT and xUDT name their owner by a lock hash, and
 owner mode, which lifts the rule that outputs may not exceed inputs, asks only for an
@@ -65,7 +68,8 @@ which shows it was the protocol's lock that opened owner mode.
 ## Runnable
 
 `code/contracts/delegate-vault`, test `p15_a_lock_anyone_can_open_is_an_owner_key`, run
-against the mainnet xUDT binary in `code/tests/bin/xudt`.
+against the mainnet xUDT binary in `code/tests/bin/xudt`. The plain cell under the lock:
+test `delegate_vault_the_lock_opens_only_the_vault`.
 
 ## References
 
